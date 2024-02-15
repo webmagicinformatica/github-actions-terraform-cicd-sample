@@ -1,66 +1,50 @@
-name: 'Terraform'
+name: Terraform CI/CD
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-
-permissions:
-  contents: read
+    branches:
+      - main
 
 jobs:
   terraform:
-    name: 'Terraform'
     runs-on: ubuntu-latest
-    environment: production
-
-    defaults:
-      run:
-        shell: bash
+    
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v2
 
-      - name: Set Terraform variables from environment
-        run: |-
-          export AWS_ACCESS_KEY_ID=${{ env.AWS_ACCESS_KEY_ID }}
-          export AWS_SECRET_ACCESS_KEY=${{ env.AWS_SECRET_ACCESS_KEY }}
-          export AWS_REGION=${{ env.AWS_REGION }}
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v1
+      with:
+        terraform_version: 1.0.0
 
-      - name: Setup Terraform
-        run: terraform init -backend-config "access_key=${{ env.AWS_ACCESS_KEY_ID }},secret_key=${{ env.AWS_SECRET_ACCESS_KEY }},region=${{ env.AWS_REGION }}"
+    - name: Initialize Terraform
+      run: terraform init
 
-      - name: Terraform Init
-        run: terraform init
+    - name: Plan Terraform changes
+      run: terraform plan -out=tfplan
 
-      - name: Terraform Format
-        run: terraform fmt -check
+    # Add a prompt to ask the user whether to apply or destroy changes
+    - name: Ask for action
+      run: |
+        read -p "Do you want to apply or destroy Terraform changes? (apply/destroy): " action
+        echo "ACTION=$action" >> $GITHUB_ENV
 
-      - name: Terraform Plan
-        run: terraform plan -input=false
+    # Conditionally apply or destroy based on user input
+    - name: Apply or destroy Terraform changes
+      run: |
+        if [ "$ACTION" = "apply" ]; then
+          terraform apply tfplan -auto-approve
+        elif [ "$ACTION" = "destroy" ]; then
+          terraform destroy -auto-approve
+        else
+          echo "Invalid action. Exiting..."
+          exit 1
+        fi
 
-      - name: Apply or Destroy confirmation
-        uses: peter-evans/fast-actions@v3
-        with:
-          actions: "apply,destroy"
-          default_action: "plan"
-          commands:
-            apply: terraform apply --auto-approve
-            destroy: terraform destroy --auto-approve
-
-      - name: Wait for approval (Apply)
-        if: ${{ github.event.inputs.action == 'apply' }}  # Corrected conditional syntax
-        run: |
-          gh issue create -R ${{ github.repository }} -t "Apply requested - ${{ github.sha }}" -b "Please review the changes and approve by commenting '/approve'"
-          while true; do
-            sleep 60
-            comments=$(gh issue comments -R ${{ github.repository }} -i ${{ github.issue.number }})
-            if [[ $comments == *"approve"* ]]; then
-              break
-            fi
-          done
-
-      - name: Execute selected action
-        if: ${{ github.event.inputs.action != 'plan' }}  # Corrected conditional syntax
-        run: ${{ github.event.inputs.commands[github.event.inputs.action] }}  # Corrected expression
+    - name: Clean up
+      run: rm tfplan
