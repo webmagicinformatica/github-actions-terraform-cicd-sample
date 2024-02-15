@@ -1,25 +1,72 @@
-name: Deploy Webserver
+name: 'Terraform'
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
+  pull_request:
+
+permissions:
+  contents: read
 
 jobs:
-  build:
+  terraform:
+    name: 'Terraform'
     runs-on: ubuntu-latest
+    environment: aws
+
+    defaults:
+      run:
+        shell: bash
+
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up AWS credentials
-        run: aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID aws_secret_access_key $AWS_SECRET_ACCESS_KEY region $AWS_REGION
-      - name: Run Terraform init
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set Terraform variables from environment
+        run: |-
+          export AWS_ACCESS_KEY_ID=${{ env.AWS_ACCESS_KEY_ID }}
+          export AWS_SECRET_ACCESS_KEY=${{ env.AWS_SECRET_ACCESS_KEY }}
+          export AWS_REGION=${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        run: terraform init -backend-config "access_key=${{ env.AWS_ACCESS_KEY_ID }},secret_key=${{ env.AWS_SECRET_ACCESS_KEY }},region=${{ env.AWS_REGION }}"
+
+      - name: Terraform Init
         run: terraform init
-      - name: Run Terraform plan
-        run: terraform plan
-      - name: Apply Terraform configuration (manual approval)
-        uses: terraform-community/apply-destroy@v1
+
+      - name: Terraform Format
+        run: terraform fmt -check
+
+      - name: Terraform Plan
+        run: terraform plan -input=false
+
+      - name: Apply or Destroy confirmation
+        uses: peter-evans/fast-actions@v3
         with:
-          terraform_dir: .
-          command: apply
-        env:
-          TF_VAR_AWS_REGION: ${{ secrets.AWS_REGION }}
+          actions: "apply,destroy"
+          default_action: "plan"
+          commands:
+            apply: |-
+              terraform apply -input=false
+            destroy: |-
+              terraform destroy -input=false
+
+      - name: Wait for approval (Apply)
+        run: |-
+          if [[ ${{ github.event.inputs.action }} == "apply" ]]; then
+            gh issue create -R ${{ github.repository }} -t "Apply requested - ${{ github.sha }}" -b "Please review the changes and approve by commenting '/approve'"
+            while true; do
+              sleep 60
+              comments=$(gh issue comments -R ${{ github.repository }} -i ${{ github.issue.number }})
+              if [[ $comments == *"approve"* ]]; then
+                break
+              fi
+            done
+          fi
+        if: ${{ github.event.inputs.action }} == "apply"
+
+      - name: Execute selected action
+        run: ${{ github.event.inputs.commands[${{ github.event.inputs.action }}] }}
+        if: ${{ github.event.inputs.action }} != "plan"
+
+    # Remember to set the corresponding environment variables securely on your CI/CD server or cloud platform!
