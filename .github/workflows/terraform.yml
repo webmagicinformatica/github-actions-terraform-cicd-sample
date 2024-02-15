@@ -46,8 +46,8 @@ jobs:
           actions: "apply,destroy"
           default_action: "plan"
           commands:
-            apply: terraform apply -input=false  # Removed unnecessary |-
-            destroy: terraform destroy -input=false  # Removed unnecessary |-
+            apply: terraform apply --auto-approve
+            destroy: terraform destroy --auto-approve
 
       - name: Wait for approval (Apply)
         if: ${{ github.event.inputs.action == 'apply' }}  # Corrected conditional syntax
