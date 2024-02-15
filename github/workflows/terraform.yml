@@ -1,0 +1,25 @@
+name: Deploy Webserver
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up AWS credentials
+        run: aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID aws_secret_access_key $AWS_SECRET_ACCESS_KEY region $AWS_REGION
+      - name: Run Terraform init
+        run: terraform init
+      - name: Run Terraform plan
+        run: terraform plan
+      - name: Apply Terraform configuration (manual approval)
+        uses: terraform-community/apply-destroy@v1
+        with:
+          terraform_dir: .
+          command: apply
+        env:
+          TF_VAR_AWS_REGION: ${{ secrets.AWS_REGION }}
