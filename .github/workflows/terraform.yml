@@ -12,7 +12,7 @@ jobs:
   terraform:
     name: 'Terraform'
     runs-on: ubuntu-latest
-    environment: aws
+    environment: production
 
     defaults:
       run:
@@ -46,27 +46,21 @@ jobs:
           actions: "apply,destroy"
           default_action: "plan"
           commands:
-            apply: |-
-              terraform apply -input=false
-            destroy: |-
-              terraform destroy -input=false
+            apply: terraform apply -input=false  # Removed unnecessary |-
+            destroy: terraform destroy -input=false  # Removed unnecessary |-
 
       - name: Wait for approval (Apply)
-        run: |-
-          if [[ ${{ github.event.inputs.action }} == "apply" ]]; then
-            gh issue create -R ${{ github.repository }} -t "Apply requested - ${{ github.sha }}" -b "Please review the changes and approve by commenting '/approve'"
-            while true; do
-              sleep 60
-              comments=$(gh issue comments -R ${{ github.repository }} -i ${{ github.issue.number }})
-              if [[ $comments == *"approve"* ]]; then
-                break
-              fi
-            done
-          fi
-        if: ${{ github.event.inputs.action }} == "apply"
+        if: ${{ github.event.inputs.action == 'apply' }}  # Corrected conditional syntax
+        run: |
+          gh issue create -R ${{ github.repository }} -t "Apply requested - ${{ github.sha }}" -b "Please review the changes and approve by commenting '/approve'"
+          while true; do
+            sleep 60
+            comments=$(gh issue comments -R ${{ github.repository }} -i ${{ github.issue.number }})
+            if [[ $comments == *"approve"* ]]; then
+              break
+            fi
+          done
 
       - name: Execute selected action
-        run: ${{ github.event.inputs.commands[${{ github.event.inputs.action }}] }}
-        if: ${{ github.event.inputs.action }} != "plan"
-
-    # Remember to set the corresponding environment variables securely on your CI/CD server or cloud platform!
+        if: ${{ github.event.inputs.action != 'plan' }}  # Corrected conditional syntax
+        run: ${{ github.event.inputs.commands[github.event.inputs.action] }}  # Corrected expression
