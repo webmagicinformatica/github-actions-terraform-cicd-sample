@@ -1,4 +1,4 @@
-name: Terraform CI/CD
+name: Terraform Deploy
 
 on:
   push:
@@ -46,23 +46,8 @@ jobs:
       run: terraform plan -out=tfplan
 
     # Add a prompt to ask the user whether to apply or destroy changes
-    - name: Ask for action
-      shell: bash
-      run: |
-        read -p "Do you want to apply or destroy Terraform changes? (apply/destroy): " action
-        echo "ACTION=$action" >> $GITHUB_ENV
-
-    # Conditionally apply or destroy based on user input
-    - name: Apply or destroy Terraform changes
-      run: |
-        if [ "$ACTION" = "apply" ]; then
-          terraform apply tfplan -auto-approve
-        elif [ "$ACTION" = "destroy" ]; then
-          terraform destroy -auto-approve
-        else
-          echo "Invalid action. Exiting..."
-          exit 1
-        fi
+    - name: Apply Terraform changes
+      run: terraform apply --auto-approve
 
     - name: Clean up
       run: rm tfplan
