@@ -47,7 +47,7 @@ jobs:
 
     # Add a prompt to ask the user whether to apply or destroy changes
     - name: Ask for action
-      shell: bash
+      shell: bash --noprofile --norc -e -o pipefail
       run: |
         read -p "Do you want to apply or destroy Terraform changes? (apply/destroy): " action
         echo "ACTION=$action" >> $GITHUB_ENV
